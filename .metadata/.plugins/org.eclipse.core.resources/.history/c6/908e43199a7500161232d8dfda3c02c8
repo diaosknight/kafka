@@ -1,0 +1,5 @@
+package com.mhh.cloud.kafka.producer;
+
+public class TestProducer {
+
+}

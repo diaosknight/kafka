@@ -1,0 +1,10 @@
+package com.mhh.cloud.kafka.producer;
+
+import java.util.*;
+
+import kafka.javaapi.producer.Producer;
+
+
+public class TestProducer {
+
+}

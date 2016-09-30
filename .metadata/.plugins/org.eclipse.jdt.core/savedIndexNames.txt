@@ -1,0 +1,22 @@
+INDEX VERSION 1.126+/root/Workspaces/MyEclipse 10/.metadata/.plugins/org.eclipse.jdt.core
+91495346.index
+1365891959.index
+535642059.index
+1575132442.index
+2703811184.index
+1762922724.index
+1999736662.index
+592972823.index
+771266150.index
+2416406931.index
+2281645359.index
+2538814272.index
+4209640481.index
+1448704736.index
+3504120472.index
+2135572452.index
+2571693688.index
+1508992790.index
+469398865.index
+1433317869.index
+2863458341.index

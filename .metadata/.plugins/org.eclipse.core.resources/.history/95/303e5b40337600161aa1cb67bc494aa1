@@ -1,0 +1,7 @@
+package com.mhh.cloud.kafka.partition;
+
+import Partitioner;
+
+public class TestPartitioner extends Partitioner {
+
+}
