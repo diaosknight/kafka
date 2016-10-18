@@ -1,0 +1,483 @@
+一 生产者接口
+Interface Producer<K,V>
+两个实现的生产者类为：KafkaProducer, MockProducer(不常用)
+
+成员函数：
+1、	void close()关闭生产者
+2、	void close(long timeout, java.util.concurrent.TimeUnit unit) 定制超时时间，关闭生产者
+3、	void flush() 将生产者放在缓冲区的数据推送
+4、	java.util.List<PartitionInfo> partitionsFor(java.lang.String topic) 得到一个主题的partition，注意partition随着时间会不断变化
+5、	java.util.concurrent.Future<RecordMetadata> send(ProducerRecord<K,V> record)发送一条消息记录，返回response记录的信息
+6、	java.util.concurrent.Future<RecordMetadata> send(ProducerRecord<K,V> record,Callback callback)当服务器确认后，给与相应的反馈信息
+
+补充： KafkaProducer
+类定义：public class KafkaProducer<K,V> extends java.lang.Object implements Producer<K,V>
+构造函数：
+1、public KafkaProducer(java.util.Map<java.lang.String,java.lang.Object> configs)
+用键值对的configs 创建一个对象
+2、public KafkaProducer(java.util.Properties properties)
+使用属性组创建一个kafka生产者对象
+3、public KafkaProducer(java.util.Map<java.lang.String,java.lang.Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer)
+多了key和value的序列化器，用于将字符串转化为字节时的串行化操作
+4、public KafkaProducer(java.util.Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer)
+同上
+
+send用法
+举例1：
+ byte[] key = "key".getBytes();
+ byte[] value = "value".getBytes();
+ ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("my-topic", key, value)
+ producer.send(record).get();
+举例2：
+ ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("the-topic", key, value);
+ producer.send(myRecord,
+               new Callback() {
+                   public void onCompletion(RecordMetadata metadata, Exception e) {
+                       if(e != null)
+                           e.printStackTrace();
+                       System.out.println("The offset of the record we just sent is: " + metadata.offset());
+                   }
+               });
+举例3：
+ producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key1, value1), callback1);
+ producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key2, value2), callback2);
+callback这里可以为执行次序， 保证callback1在callback2之前执行
+
+flush 用法举例：
+ for(ConsumerRecord<String, String> record: consumer.poll(100))
+     producer.send(new ProducerRecord("my-topic", record.key(), record.value());
+ producer.flush();
+ consumer.commit();
+send后的记录放在了缓冲区内，生产者通过flush发送给kafka
+
+整个生产者发送举例：
+ Properties props = new Properties();
+ props.put("bootstrap.servers", "localhost:4242");
+ props.put("acks", "all");
+ props.put("retries", 0);
+ props.put("batch.size", 16384);
+ props.put("linger.ms", 1);
+ props.put("buffer.memory", 33554432);
+ props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+ props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+ Producer<String, String> producer = new KafkaProducer<>(props);
+ for(int i = 0; i < 100; i++)
+     producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
+
+ producer.close();
+
+补充：Interface Serializer<T>
+T 什么类型数据被序列化发送给kafka服务器
+props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+成员函数
+1、void close() 关闭序列化
+2、byte[] serialize(java.lang.String topic, T data) 给该主题下的消息数据序列化
+3、void configure(java.util.Map<java.lang.String,?> configs, boolean isKey)
+设定这个类，configs设置键值对，isKey 是键还是值
+有四个实现的类为ByteArraySerializer, IntegerSerializer, LongSerializer, StringSerializer
+
+二、PartitionInfo
+定义：public class PartitionInfo extends java.lang.Object 
+该类主要给出了主题和主题的某个partition的详细信息(元信息）
+
+构造函数：PartitionInfo(java.lang.String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) 
+inSyncReplicas为与leader保存了同种信息的node集合，简称为ISR
+成员函数：
+1、public java.lang.String topic() 取主题名
+2、public int partition()取当前的划分序号
+3、public Node[] replicas() 取副本
+4、public Node leader()    取leader
+5、public Node[] inSyncReplicas() 取ISR
+
+补充：Node类
+1、public class Node extends java.lang.Object
+kafka 的服务器信息
+构造函数：Node(int id, java.lang.String host, int port) 需要给分配id 主机名和端口号
+成员函数：
+1、public int id() 取服务器id
+2、public java.lang.String idString() 字符串系列化服务器id
+3、public java.lang.String host() 取主机名
+4、public int port() 取端口号
+
+三、RecordMetadata
+定义：public final class RecordMetadata extends java.lang.Object
+主要记录了在kafka中一条记录的元数据，包括partition的基地址和偏移量
+构造函数：RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) 
+成员函数：
+1、public long offset() 返回记录的偏移量
+2、public java.lang.String topic() 返回主题
+3、public int partition() 返回partition
+
+补充：TopicPartition
+定义：public final class TopicPartition extends java.lang.Object implements java.io.Serializable
+该类用于定义了某个主题和某个partition序号
+构造函数：TopicPartition(java.lang.String topic, int partition) 
+成员函数：
+1、public int partition() 返回当前partition的序号
+2、public java.lang.String topic() 返回主题
+
+四、ProducerConfig
+定义：public class ProducerConfig extends org.apache.kafka.common.config.AbstractConfig
+该类主要用于生产者的配置
+成员函数基本没用
+成员变量有：
+public static final java.lang.String	ACKS_CONFIG	"acks"  确认方式
+public static final java.lang.String	BATCH_SIZE_CONFIG	"batch.size"  
+public static final java.lang.String	BLOCK_ON_BUFFER_FULL_CONFIG	"block.on.buffer.full"
+public static final java.lang.String	BOOTSTRAP_SERVERS_CONFIG	"bootstrap.servers"
+public static final java.lang.String	BUFFER_MEMORY_CONFIG	"buffer.memory"
+public static final java.lang.String	CLIENT_ID_CONFIG	"client.id"
+public static final java.lang.String	COMPRESSION_TYPE_CONFIG	"compression.type"
+public static final java.lang.String	CONNECTIONS_MAX_IDLE_MS_CONFIG	"connections.max.idle.ms"
+public static final java.lang.String	KEY_SERIALIZER_CLASS_CONFIG	"key.serializer"
+public static final java.lang.String	KEY_SERIALIZER_CLASS_DOC	"Serializer class for key that implements the <code>Serializer</code> interface."
+public static final java.lang.String	LINGER_MS_CONFIG	"linger.ms"
+public static final java.lang.String	MAX_BLOCK_MS_CONFIG	"max.block.ms"
+public static final java.lang.String	MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION	"max.in.flight.requests.per.connection"
+public static final java.lang.String	MAX_REQUEST_SIZE_CONFIG	"max.request.size"
+public static final java.lang.String	METADATA_FETCH_TIMEOUT_CONFIG	"metadata.fetch.timeout.ms"
+public static final java.lang.String	METADATA_MAX_AGE_CONFIG	"metadata.max.age.ms"
+public static final java.lang.String	METRIC_REPORTER_CLASSES_CONFIG	"metric.reporters"
+public static final java.lang.String	METRICS_NUM_SAMPLES_CONFIG	"metrics.num.samples"
+public static final java.lang.String	METRICS_SAMPLE_WINDOW_MS_CONFIG	"metrics.sample.window.ms"
+public static final java.lang.String	PARTITIONER_CLASS_CONFIG	"partitioner.class"
+public static final java.lang.String	RECEIVE_BUFFER_CONFIG	"receive.buffer.bytes"
+public static final java.lang.String	RECONNECT_BACKOFF_MS_CONFIG	"reconnect.backoff.ms"
+public static final java.lang.String	REQUEST_TIMEOUT_MS_CONFIG	"request.timeout.ms"
+public static final java.lang.String	RETRIES_CONFIG	"retries"
+public static final java.lang.String	RETRY_BACKOFF_MS_CONFIG	"retry.backoff.ms"
+public static final java.lang.String	SEND_BUFFER_CONFIG	"send.buffer.bytes"
+public static final java.lang.String	TIMEOUT_CONFIG	"timeout.ms"
+public static final java.lang.String	VALUE_SERIALIZER_CLASS_CONFIG	"value.serializer"
+public static final java.lang.String	VALUE_SERIALIZER_CLASS_DOC	"Serializer class for value that implements the <code>Serializer</code> interface."
+
+使用方法：
+Properties props = new Properties();
+props.put("metadata.broker.list", "localhost:9092");
+props.put("serializer.class", "kafka.serializer.StringEncoder");
+props.put("partitioner.class", "com.mhh.cloud.kafka.partition.TestPartitioner");
+props.put("request.required.acks","1");		
+ProducerConfig config = new ProducerConfig(props);
+在属性里面定义上面的参数值，然后通过构造函数构造出配置对象。
+
+五、Partitioner
+定义：public interface Partitioner extends Configurable
+用来根据记录生成partition
+成员函数:
+1、void close() 关闭partition
+2、int partition(java.lang.String topic, java.lang.Object key, byte[] keyBytes, java.lang.Object value, byte[] valueBytes, Cluster cluster)
+topic：主题名，key partition的键值，keyBytes 序列化的键值，value：partition的个数，valueBytes序列化的value，cluster 集群
+可以通过重写override来覆盖当前的版本
+	@Override
+	这个重写的上个版本的partitioner函数，这个需要全部的替换全部的参数，但是关于partition的产生是一样的
+	public int partition(Object obj, int a_numPartitions)
+	{
+		String key = obj.toString();
+		int partition = 0;
+		int offset = key.lastIndexOf('.');
+		if (offset > 0)
+		{
+			partition = Integer.parseInt(key.substring(offset + 1)) % a_numPartitions;			
+		}
+		return partition;
+	}
+	
+补充： Cluster 集群类
+定义：public final class Cluster extends java.lang.Object
+定义了kafka集群，它由主题、partition和服务器组成
+构造函数：
+Cluster(java.util.Collection<Node> nodes, java.util.Collection<PartitionInfo> partitions, java.util.Set<java.lang.String> unauthorizedTopics)
+使用partitioninfo和node 构造一个集群，最后一个参数未知
+成员函数：
+1、public static Cluster empty() 创建一个空的集群
+2、public static Cluster bootstrap(java.util.List<java.net.InetSocketAddress> addresses) 通过指定的主机：端口创建一个bootstrap集群
+3、public java.util.List<Node> nodes() 返回集群的服务器
+4、public Node nodeById(int id) 通过id号得到服务器，没有此id返回空
+5、public Node leaderFor(TopicPartition topicPartition) 得到主题partition的lead信息
+6、public PartitionInfo partition(TopicPartition topicPartition)得到某个制定主题和partition的元数据信息
+7、public java.util.List<PartitionInfo> partitionsForTopic(java.lang.String topic)得到某个主题的所有partition
+8、public java.util.List<PartitionInfo> availablePartitionsForTopic(java.lang.String topic) 得到该主题可用的partition
+9、public java.util.List<PartitionInfo> partitionsForNode(int nodeId)查找以当前服务器为leader的所有partition
+10、public java.lang.Integer partitionCountForTopic(java.lang.String topic) 给定主题有多少partition
+11、public java.util.Set<java.lang.String> topics() 得到所有的主题
+
+六、Class ProducerRecord<K,V>
+定义：public final class ProducerRecord<K,V> extends java.lang.Object
+被发送到kafka的key 和value对，他必须包含主题和值，可选的key和partition号
+构造函数：
+1、ProducerRecord(java.lang.String topic, java.lang.Integer partition, K key, V value)
+2、ProducerRecord(java.lang.String topic, K key, V value)
+3、ProducerRecord(java.lang.String topic, V value)
+记录被发送到的详细信息的返回
+1、public java.lang.String topic()
+2、public K key()
+3、public V value()
+4、public java.lang.Integer partition()
+
+七、Interface Consumer<K,V>
+我们主要讲解具体实现的KafkaConsumer<K,V>
+定义：public class KafkaConsumer<K,V> extends java.lang.Object implements Consumer<K,V>
+构造：
+1、KafkaConsumer(java.util.Map<java.lang.String,java.lang.Object> configs)同生产者
+2、KafkaConsumer(java.util.Map<java.lang.String,java.lang.Object> configs, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer)
+3、KafkaConsumer(java.util.Properties properties)
+4、KafkaConsumer(java.util.Properties properties, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer)
+成员函数：
+1、public void assign(java.util.List<TopicPartition> partitions) 手动的指派消费者的partition，手动指派不能用于再平衡操作，和自动分配的subscribe不能同时使用
+2、public java.util.Set<TopicPartition> assignment() 得到分给当前消费者的所有partition
+3、public void close() 关闭消费者，注意不能通过wakeup函数唤醒
+4、public void commitAsync() 以异步方式跟新poll()函数获取的最新的pritition的偏移量
+5、public void commitAsync(OffsetCommitCallback callback) 设置了一个偏移量更新之后的回调信号
+6、public void commitAsync(java.util.Map<TopicPartition,OffsetAndMetadata> offsets, OffsetCommitCallback callback) 自定义了偏移量用于更新
+7、public void commitSync() 以同步方式更新所有partition的offset
+8、public void commitSync(java.util.Map<TopicPartition,OffsetAndMetadata> offsets) 设立了更新的偏移量
+9、public OffsetAndMetadata committed(TopicPartition partition) 用于得到某一个partition的最新的偏移量原始数据
+10、public java.util.Map<java.lang.String,java.util.List<PartitionInfo>> listTopics() 得到所有topic的所有partition元数据
+11、public java.util.List<PartitionInfo> partitionsFor(java.lang.String topic) 得到某一个topic的所有partition元数据
+12、public void pause(TopicPartition... partitions) 不再从设置的partiitions中poll数据
+13、public void resume(TopicPartition... partitions) 使被pause的数据重新能够poll数据
+14、public long position(TopicPartition partition) 得到partition下一条记录的偏移地址
+15、public ConsumerRecords<K,V> poll(long timeout)等待多少毫秒获得kafka数据，注意同时取多个topic和partition的数据
+16、public void seek(TopicPartition partition, long offset) 重写partition 取数据的偏移量，这样poll会使用此偏移量来读取新数据
+17、public void seekToBeginning(TopicPartition... partitions)定位到第一条partition记录，只有在position和poll调用后才能生效
+18、public void seekToEnd(TopicPartition... partitions) 定位到最新的offset上，后半部分同上
+19、public void subscribe(java.util.List<java.lang.String> topics, ConsumerRebalanceListener listener)
+20、public void subscribe(java.util.List<java.lang.String> topics) 制定订阅的主题，当topics为空，相当于unsubscribe，同时当前有主题，则全部删除
+21、public void subscribe(java.util.regex.Pattern pattern, ConsumerRebalanceListener listener)
+当出现下面四种情况的一种，将会处罚，kafka系统的再平衡
+(1)被订阅主题的partition数量发生变化
+(2)主题被创建或者删除
+(3)在consumer group 里面的consumer 宕机了
+(4)新的消费者添加到consumer group中
+ConsumerRebalanceListener 监听器就是监听上面四种情况之一的
+22、public void unsubscribe() 删除当前的主题
+23、public java.util.Set<java.lang.String> subscription() 得到当前消费者的订阅主题
+24、public void wakeup() 唤醒消费者
+
+实例1 简单的kafkaconsumer应用
+     Properties props = new Properties();
+     props.put("bootstrap.servers", "localhost:9092");
+     props.put("group.id", "test");
+     props.put("enable.auto.commit", "true");
+     props.put("auto.commit.interval.ms", "1000");
+     props.put("session.timeout.ms", "30000");
+     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+     consumer.subscribe(Arrays.asList("foo", "bar"));
+     while (true) {
+         ConsumerRecords<String, String> records = consumer.poll(100);
+         for (ConsumerRecord<String, String> record : records)
+             System.out.printf("offset = %d, key = %s, value = %s", record.offset(), record.key(), record.value());
+     }
+1、enable.auto.commit 偏移量自动更新，以auto.commit.interval.ms定义的时间
+2、消费者周期性的ping服务器的主机，当服务器集群在session.timeout.ms的时间内没有收到心跳时，认为该消费者死了
+
+实例2：手动控制offset
+     Properties props = new Properties();
+     props.put("bootstrap.servers", "localhost:9092");
+     props.put("group.id", "test");
+     props.put("enable.auto.commit", "false");
+     props.put("auto.commit.interval.ms", "1000");
+     props.put("session.timeout.ms", "30000");
+     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+     consumer.subscribe(Arrays.asList("foo", "bar"));
+     final int minBatchSize = 200;
+     List<ConsumerRecord<String, String>> buffer = new ArrayList<>();
+     while (true) {
+         ConsumerRecords<String, String> records = consumer.poll(100);
+         for (ConsumerRecord<String, String> record : records) {
+             buffer.add(record);
+         }
+         if (buffer.size() >= minBatchSize) {
+             insertIntoDb(buffer);
+             consumer.commitSync();
+             buffer.clear();
+         }
+     }
+一次用于获得超过200个以上的记录，之后在更新offset
+同时也可以更加准确的控制commitSync的offset地址
+
+实例3：更加精确的commitSync
+     try {
+         while(running) {
+             ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
+             for (TopicPartition partition : records.partitions()) {
+                 List<ConsumerRecord<String, String>> partitionRecords = records.records(partition);
+                 for (ConsumerRecord<String, String> record : partitionRecords) {
+                     System.out.println(record.offset() + ": " + record.value());
+                 }
+                 long lastOffset = partitionRecords.get(partitionRecords.size() - 1).offset();
+                 consumer.commitSync(Collections.singletonMap(partition, new OffsetAndMetadata(lastOffset + 1)));
+             }
+         }
+     } finally {
+       consumer.close();
+     }
+
+实例四、消费者关联特殊的partition
+     String topic = "foo";
+     TopicPartition partition0 = new TopicPartition(topic, 0);
+     TopicPartition partition1 = new TopicPartition(topic, 1);
+     consumer.assign(Arrays.asList(partition0, partition1));
+
+八、Class ConsumerRecord<K,V>
+定义：public final class ConsumerRecord<K,V> extends java.lang.Object 其中K,V分别为key和value的类型
+消费者通过poll读取的某一条记录(注意：它来自ConsumerRecords的其中一条List<ConsumerRecord>等于ConsumerRecords)
+构造函数：ConsumerRecord(java.lang.String topic, int partition, long offset, K key, V value)
+成员函数：
+1、public java.lang.String topic() 这条记录的主题
+2、public int partition() 记录的partition
+3、public long offset() 在某个partition上的偏移量
+4、public K key() 记录的关键字
+5、public V value() 记录的值
+
+九、Class ConsumerRecords<K,V>
+定义：public class ConsumerRecords<K,V> extends java.lang.Object implements java.lang.Iterable<ConsumerRecord<K,V>>
+构造函数：public ConsumerRecords(java.util.Map<TopicPartition,java.util.List<ConsumerRecord<K,V>>> records)
+成员函数：
+1、public static <K,V> ConsumerRecords<K,V> empty() 建立一个空的ConsumerRecords<K,V>对象
+2、public boolean isEmpty() 当前对象是否为空
+3、public int count() 所有主题的记录数量
+4、public java.util.Set<TopicPartition> partitions() 得到记录集中的topicpartition集合
+5、public java.util.Iterator<ConsumerRecord<K,V>> iterator() 返回一个迭代器，因此可以顺序访问，也可以使用for循环
+6、public java.util.List<ConsumerRecord<K,V>> records(TopicPartition partition) 返回某个partition的记录集合
+7、public java.lang.Iterable<ConsumerRecord<K,V>> records(java.lang.String topic)返回某个主题的记录集合
+成员变量：public static final ConsumerRecords<java.lang.Object,java.lang.Object> EMPTY 记录是否为空
+
+十、Class ConsumerConfig
+定义：public class ConsumerConfig extends org.apache.kafka.common.config.AbstractConfig
+这个类定义了消费者的配置信息
+成员函数：
+1、public static java.util.Map<java.lang.String,java.lang.Object> addDeserializerToConfig(java.util.Map
+   <java.lang.String,java.lang.Object> configs,Deserializer<?> keyDeserializer,Deserializer<?> valueDeserializer)
+   将去序列化操作添加给配置
+2、public static java.util.Properties addDeserializerToConfig(java.util.Properties properties,
+   Deserializer<?> keyDeserializer, Deserializer<?> valueDeserializer) 同上
+成员变量：
+Modifier and Type	Constant Field	Value
+public static final java.lang.String	AUTO_COMMIT_INTERVAL_MS_CONFIG	"auto.commit.interval.ms"
+public static final java.lang.String	AUTO_OFFSET_RESET_CONFIG	"auto.offset.reset"
+public static final java.lang.String	BOOTSTRAP_SERVERS_CONFIG	"bootstrap.servers"
+public static final java.lang.String	CHECK_CRCS_CONFIG	"check.crcs"
+public static final java.lang.String	CLIENT_ID_CONFIG	"client.id"
+public static final java.lang.String	CONNECTIONS_MAX_IDLE_MS_CONFIG	"connections.max.idle.ms"
+public static final java.lang.String	ENABLE_AUTO_COMMIT_CONFIG	"enable.auto.commit"
+public static final java.lang.String	FETCH_MAX_WAIT_MS_CONFIG	"fetch.max.wait.ms"
+public static final java.lang.String	FETCH_MIN_BYTES_CONFIG	"fetch.min.bytes"
+public static final java.lang.String	GROUP_ID_CONFIG	"group.id"
+public static final java.lang.String	HEARTBEAT_INTERVAL_MS_CONFIG	"heartbeat.interval.ms"
+public static final java.lang.String	KEY_DESERIALIZER_CLASS_CONFIG	"key.deserializer"
+public static final java.lang.String	KEY_DESERIALIZER_CLASS_DOC	"Deserializer class for key that implements the <code>Deserializer</code> interface."
+public static final java.lang.String	MAX_PARTITION_FETCH_BYTES_CONFIG	"max.partition.fetch.bytes"
+public static final java.lang.String	METADATA_MAX_AGE_CONFIG	"metadata.max.age.ms"
+public static final java.lang.String	METRIC_REPORTER_CLASSES_CONFIG	"metric.reporters"
+public static final java.lang.String	METRICS_NUM_SAMPLES_CONFIG	"metrics.num.samples"
+public static final java.lang.String	METRICS_SAMPLE_WINDOW_MS_CONFIG	"metrics.sample.window.ms"
+public static final java.lang.String	PARTITION_ASSIGNMENT_STRATEGY_CONFIG	"partition.assignment.strategy"
+public static final java.lang.String	RECEIVE_BUFFER_CONFIG	"receive.buffer.bytes"
+public static final java.lang.String	RECONNECT_BACKOFF_MS_CONFIG	"reconnect.backoff.ms"
+public static final java.lang.String	REQUEST_TIMEOUT_MS_CONFIG	"request.timeout.ms"
+public static final java.lang.String	RETRY_BACKOFF_MS_CONFIG	"retry.backoff.ms"
+public static final java.lang.String	SEND_BUFFER_CONFIG	"send.buffer.bytes"
+public static final java.lang.String	SESSION_TIMEOUT_MS_CONFIG	"session.timeout.ms"
+public static final java.lang.String	VALUE_DESERIALIZER_CLASS_CONFIG	"value.deserializer"
+public static final java.lang.String	VALUE_DESERIALIZER_CLASS_DOC	"Deserializer class for value that implements the <code>Deserializer</code> interface."
+
+十一、Class OffsetAndMetadata
+定义：public class OffsetAndMetadata extends java.lang.Object implements java.io.Serializable
+创建一个具有offset和metadata的类
+构造函数：
+1、public OffsetAndMetadata(long offset)
+2、public OffsetAndMetadata(long offset, java.lang.String metadata) 
+kafka的偏移量更新API能够允许当一个偏移量被更新，用户提供自定义的额外的metadata(元数据)
+成员函数：
+1、public long offset() 取偏移量
+2、public java.lang.String metadata() 取metadata
+
+十二、Interface ConsumerRebalanceListener
+定义：public interface ConsumerRebalanceListener
+回调接口，在kafka四种条件出现后，执行指定的操作
+成员函数：
+1、void onPartitionsRevoked(java.util.Collection<TopicPartition> partitions)
+   原consumer需要监听分区撤销事件，并在撤销时确认好offset
+2、void onPartitionsAssigned(java.util.Collection<TopicPartition> partitions)
+   新consumer监听分区分配事件，获取当前分区消费的offset
+
+伪代码举例：
+ public class SaveOffsetsOnRebalance implements ConsumerRebalanceListener {
+       private Consumer<?,?> consumer;
+
+       public SaveOffsetsOnRebalance(Consumer<?,?> consumer) {
+           this.consumer = consumer;
+       }
+
+       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+           // save the offsets in an external store using some custom code not described here
+           for(TopicPartition partition: partitions)
+              saveOffsetInExternalStore(consumer.position(partition));
+       }
+
+       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+           // read the offsets from an external store using some custom code not described here
+           for(TopicPartition partition: partitions)
+              consumer.seek(partition, readOffsetFromExternalStore(partition));
+       }
+   }
+ 
+十三、Interface OffsetCommitCallback
+定义：public interface OffsetCommitCallback
+成员函数：void onComplete(java.util.Map<TopicPartition,OffsetAndMetadata> offsets, java.lang.Exception exception)
+当服务器对更新请求发出确认时，这个回调方法将会被调用
+
+十四、Enum OffsetResetStrategy
+偏移量重置的思路
+成员变量：
+1、public static final OffsetResetStrategy LATEST
+2、public static final OffsetResetStrategy EARLIEST
+3、public static final OffsetResetStrategy NONE
+成员函数：
+1、public static OffsetResetStrategy[] values() 返回所有的变量名
+2、public static OffsetResetStrategy valueOf(java.lang.String name) 返回指定的变量名
+例：
+for (OffsetResetStrategy c : OffsetResetStrategy.values())
+    System.out.println(c);
+	
+15、Class RangeAssignor
+定义：public class RangeAssignor extends org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor
+一种消费者partition的消费方式
+这种分配方式：对每一个同主题，前面的消费者分配多一个partition
+例如：有两个消费者，C0和C1，两个主题t0和t1，每个主题有三个partition，这时有t0p0,t0p1,t0p2,t1p0,t1p1和t1p2
+最终的分配为：C0: [t0p0, t0p1, t1p0, t1p1] C1: [t0p2, t1p2]
+成员函数：
+public java.util.Map<java.lang.String,java.util.List<TopicPartition>> assign(java.util.Map<java.lang.String,java.lang.Integer> 
+partitionsPerTopic, java.util.Map<java.lang.String,java.util.List<java.lang.String>> subscriptions)
+对订阅集合和partition，使用rangeAssignor进行分配
+
+16、Class RoundRobinAssignor
+定义：public class RoundRobinAssignor extends org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor
+一种消费者partition的消费方式
+这种分配方式：逐个给每一个消费者
+例如：有两个消费者，C0和C1，两个主题t0和t1，每个主题有三个partition，这时有t0p0,t0p1,t0p2,t1p0,t1p1和t1p2
+最终的分配为：C0: [t0p0, t0p2, t1p1] C1: [t0p1, t1p0, t1p2]
+成员函数：
+public java.util.Map<java.lang.String,java.util.List<TopicPartition>> assign(java.util.Map<java.lang.String,java.lang.Integer> 
+partitionsPerTopic, java.util.Map<java.lang.String,java.util.List<java.lang.String>> subscriptions)
+对订阅集合和partition，使用RoundRobinAssignor进行分配
+
+17、class Properties 属性映射表
+三个特征：
+1、键和值都是字符串
+2、表可以保存到一个文件中，也可以从文件中加载
+3、使用一个默认的辅助表
+成员函数：
+1、Properties() 创建一个空的属性映射表
+2、Properties(Properties defaults) 创建一个带有默认属性的映射表
+3、String getProperty(String key) 获得属性的对应关系；返回与键对应的字符串
+4、String getProperty(String key, String defaultValue) 同上
+5、void  load(InputStream in) 从inputstream中 加载属性映射表
+6、void store(OutputStream out, String commentString) 把属性映射表存储到outputstream

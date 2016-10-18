@@ -1,0 +1,88 @@
+1、启动zookeeper
+zookeeper-server-start ../config/zookeeper.properties
+
+2、启动kafka
+kafka-server-start.bat ..\config\server.properties
+
+3、删除以前的Topic
+kafka-run-class.bat kafka.admin.DeleteTopicCommand --topic mhh_page_visits --zookeeper localhost:2181
+
+4、在Linux shell下创建一个Topic
+kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 5 --topic mhh_page_visits
+
+5、TestProducer.java运行生产者的代码，在Eclipse下运行就行了
+
+6、在服务器上查看数据
+kafka-topics.bat --describe --zookeeper localhost:2181 --topic mhh_page_visits
+kafka-console-consumer.bat --zookeeper localhost:2181 --topic mhh_page_visits --from-beginning
+
+7、TestConsumer.java运行消费者代码，在Eclipse下运行就行了
+
+
+
+
+
+
+
+1．修改log4j.properties 文件中的“kafka.logs.dir=logs ”为“kafka.logs.dir=/tmp/logs”。
+2．修改test-log4j.properties 文件中的4 处“ File=logs/server.log ” 为
+“File=/tmp/logs/server.log”。
+3．复制config/server.properties 为
+第一个节点server-9093.properties，修改如下内容：
+broker.id=9093
+port=9093
+host.name=localhost
+log.dirs=/tmp/kafka-logs-9093
+4．复制config/server.properties 为
+第一个节点server-9094.properties，修改如下内容：
+broker.id=9094
+port=9094
+host.name=localhost
+log.dirs=/tmp/kafka-logs-9094
+四、修改启动文件
+删除所有不能在windows 下运行的*.sh 文件。复制kafka_2.11-0.8.2.1/bin/windows/*.bat
+到kafka_2.11-0.8.2.1/bin 目录下。
+1．修改zookeeper-server-start.bat 文件中的“%~dp0../../”为“%~dp0/../”。
+2．修改kafka-server-start.bat 文件中的“%~dp0../../”为“%~dp0/../”。
+3．修改kafka-run-class.bat 文件中的“pushd %~dp0..\..”为“pushd %~dp0”。
+修改kafka-run-class.bat 文件中的“%BASE_DIR%/config”为“%BASE_DIR%/../config”。
+将kafka-run-class.bat 文件中的如下内容：
+rem Classpath addition for kafka-core dependencies
+for %%i in (%BASE_DIR%\core\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
+call :concat %%i
+)
+rem Classpath addition for kafka-perf dependencies
+for %%i in (%BASE_DIR%\perf\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
+call :concat %%i
+)
+rem Classpath addition for kafka-clients
+for %%i in (%BASE_DIR%\clients\build\libs\kafka-clients-*.jar) do (
+call :concat %%i
+)
+rem Classpath addition for kafka-examples
+for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
+call :concat %%i
+)
+rem Classpath addition for contrib/hadoop-consumer
+for %%i in (%BASE_DIR%\contrib\hadoop-consumer\build\libs\kafka-hadoop-consumer-*.jar)
+do (
+call :concat %%i
+)
+rem Classpath addition for contrib/hadoop-producer
+for %%i in (%BASE_DIR%\contrib\hadoop-producer\build\libs\kafka-hadoop-producer-*.jar) do
+(
+call :concat %%i
+)
+rem Classpath addition for release
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+call :concat %%i
+)
+rem Classpath addition for core
+for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
+call :concat %%i
+)
+修改为：
+rem Classpath addition for release
+for %%i in (%BASE_DIR%\..\libs\*.jar) do (
+call :concat %%i
+)

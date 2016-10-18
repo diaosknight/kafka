@@ -1,0 +1,18 @@
+1、启动zookeeper
+bin/zookeeper-server-start.sh config/zookeeper.properties
+
+2、启动kafka
+bin/kafka-server-start.sh config/server.properties
+
+3、删除以前的Topic
+kafka-run-class.sh kafka.admin.DeleteTopicCommand --topic mhh_page_visits --zookeeper localhost:2181
+
+4、在Linux shell下创建一个Topic
+bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 5 --topic mhh_page_visits
+
+5、TestProducer.java运行生产者的代码，在Eclipse下运行就行了
+
+6、在服务器上查看数据
+bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic mhh_page_visits --from-beginning
+
+7、TestConsumer.java运行消费者代码，在Eclipse下运行就行了
